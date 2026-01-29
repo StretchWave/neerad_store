@@ -8,21 +8,44 @@ class MyHomePage extends StatelessWidget {
       appBar: AppBar(title: const Text('Billing', style: Stylebook.heading1)),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.start,
+        child: Column(
           children: [
-            Text('Item Name:  ', style: Stylebook.heading2),
-            Expanded(child: 
-            TextField(
-              decoration: InputDecoration(
-                labelText: 'Enter the name of the product:',
-                border: OutlineInputBorder(),
-              ),
-              )
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text('Item ID:  ', style: Stylebook.heading2),
+                SizedBox(
+                  width: 250, // ← fixed width here
+                  height: 50,
+                  child: TextField(
+                    decoration: InputDecoration(
+                        hintText: 'Scan the Bar code here!',
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8.0),
+                        )
+                      ),
+                  ),
+                ),
+              ],
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.start,
+              children: [
+                Text('Item Name:  ', style: Stylebook.heading2),
+                SizedBox(
+                  width: 250, // ← fixed width here
+                  height: 50,
+                  child: TextField(
+                    decoration: InputDecoration(
+                        hintText: 'Type the item to search here',
+                        border: OutlineInputBorder()
+                      ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
-        
       ),
     );
   }
