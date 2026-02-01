@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:neerad_store/Screens/BillingScreen.dart';
+import 'package:neerad_store/Screens/InventoryScreen.dart';
 import 'package:neerad_store/Screens/ProductScreen.dart';
 import 'package:neerad_store/Screens/SalesScreen.dart';
 import 'package:neerad_store/Screens/SettingsScreen.dart';
@@ -18,6 +19,7 @@ class _MainLayoutState extends State<MainLayout> {
   final List<Widget> _screens = [
     const BillingScreen(),
     const ProductScreen(),
+    const InventoryScreen(),
     const SalesScreen(),
     const SettingsScreen(),
   ];
@@ -35,7 +37,9 @@ class _MainLayoutState extends State<MainLayout> {
               });
             },
           ),
-          Expanded(child: _screens[_currentIndex]),
+          Expanded(
+            child: IndexedStack(index: _currentIndex, children: _screens),
+          ),
         ],
       ),
     );

@@ -36,15 +36,21 @@ class Sidebar extends StatelessWidget {
             isDark: isDark,
           ),
           _SidebarItem(
-            icon: Icons.history,
+            icon: Icons.search,
             isSelected: currentIndex == 2,
             onTap: () => onItemSelected(2),
             isDark: isDark,
           ),
           _SidebarItem(
-            icon: Icons.settings,
+            icon: Icons.history,
             isSelected: currentIndex == 3,
             onTap: () => onItemSelected(3),
+            isDark: isDark,
+          ),
+          _SidebarItem(
+            icon: Icons.settings,
+            isSelected: currentIndex == 4,
+            onTap: () => onItemSelected(4),
             isDark: isDark,
           ),
         ],

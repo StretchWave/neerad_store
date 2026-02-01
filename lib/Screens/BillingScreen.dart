@@ -23,6 +23,29 @@ class BillingItem {
 
 class _BillingScreenState extends State<BillingScreen> {
   final _searchController = TextEditingController();
+
+  String _encodeToAlphabets(double value) {
+    if (value == 0)
+      return 'J.JJ'; // Or just J based on preference, but 0.00 -> J.JJ matches pattern
+
+    // Format to 2 decimal places first to match standard currency display
+    String formatted = value.abs().toStringAsFixed(2);
+    String encoded = '';
+
+    // Map digits 1-9 to A-I, 0 to J
+    final map = {
+      '1': 'A', '2': 'B', '3': 'C', '4': 'D', '5': 'E',
+      '6': 'F', '7': 'G', '8': 'H', '9': 'I', '0': 'J',
+      '.': '.', '-': '-', // Keep decimal and negative sign
+    };
+
+    for (int i = 0; i < formatted.length; i++) {
+      encoded += map[formatted[i]] ?? formatted[i];
+    }
+
+    return value < 0 ? '-$encoded' : encoded;
+  }
+
   final _nameController = TextEditingController();
   final _discountController = TextEditingController(text: '0.00');
   final _nameFocusNode = FocusNode();
@@ -68,6 +91,8 @@ class _BillingScreenState extends State<BillingScreen> {
         if (_barcodeBuffer.isNotEmpty) {
           _processBarcode(_barcodeBuffer);
           _barcodeBuffer = '';
+        } else if (_currentItems.isNotEmpty) {
+          _finalizeSale();
         }
       } else if (event.character != null) {
         _barcodeBuffer += event.character!;
@@ -113,6 +138,71 @@ class _BillingScreenState extends State<BillingScreen> {
     } catch (e) {
       _showError('Search error: $e');
     }
+  }
+
+  Future<void> _addCustomItem() async {
+    final isDark = context.read<SettingsProvider>().isDarkMode;
+    final priceController = TextEditingController();
+
+    await showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppStyles.getDialogBgColor(isDark),
+        title: Text(
+          'Add Custom Item',
+          style: AppStyles.getDialogTitleStyle(isDark),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: priceController,
+              keyboardType: TextInputType.numberWithOptions(decimal: true),
+              style: TextStyle(color: AppStyles.getTextColor(isDark)),
+              decoration: InputDecoration(
+                hintText: 'Enter Price',
+                labelText: 'Price',
+                hintStyle: TextStyle(
+                  color: isDark ? Colors.white38 : Colors.black38,
+                ),
+                labelStyle: TextStyle(
+                  color: isDark ? Colors.white70 : Colors.black54,
+                ),
+                enabledBorder: UnderlineInputBorder(
+                  borderSide: BorderSide(
+                    color: isDark ? Colors.white24 : Colors.black26,
+                  ),
+                ),
+              ),
+              autofocus: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              final price = double.tryParse(priceController.text);
+              if (price != null && price > 0) {
+                final customProduct = Product(
+                  itemId: 'UNKNOWN',
+                  itemName: 'Custom Item',
+                  originalPrice: 0, // Unknown cost
+                  sellingPrice: price,
+                  quantity: 1, // Not tracked in inventory really
+                );
+                _addProductToBilling(customProduct);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Add'),
+          ),
+        ],
+      ),
+    );
   }
 
   void _addProductToBilling(Product product) {
@@ -319,9 +409,23 @@ class _BillingScreenState extends State<BillingScreen> {
                     'Billing:',
                     style: AppStyles.getScreenTitleStyle(isDark),
                   ),
-                  Text(
-                    'DP: ${_dailyProfit.toStringAsFixed(2)}',
-                    style: AppStyles.dpPriceStyle,
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'DP: ${_encodeToAlphabets(_dailyProfit)}',
+                        style: AppStyles.dpPriceStyle,
+                      ),
+                      Text(
+                        'P: ${_encodeToAlphabets(_currentProfit)}',
+                        style: AppStyles.dpPriceStyle.copyWith(
+                          fontSize: 16,
+                          color: _currentProfit >= 0
+                              ? Colors.green
+                              : Colors.red,
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -413,75 +517,14 @@ class _BillingScreenState extends State<BillingScreen> {
                                         ),
                                       );
                                     },
-                                optionsViewBuilder: (context, onSelected, options) {
-                                  return Align(
-                                    alignment: Alignment.topLeft,
-                                    child: Material(
-                                      elevation: 4.0,
-                                      color: AppStyles.getDialogBgColor(isDark),
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: Container(
-                                        width: 400,
-                                        constraints: const BoxConstraints(
-                                          maxHeight: 250,
-                                        ),
-                                        child: ListView.builder(
-                                          padding: EdgeInsets.zero,
-                                          shrinkWrap: true,
-                                          itemCount: options.length,
-                                          itemBuilder: (BuildContext context, int index) {
-                                            final Product option = options
-                                                .elementAt(index);
-                                            return InkWell(
-                                              onTap: () => onSelected(option),
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      vertical: 12,
-                                                      horizontal: 16,
-                                                    ),
-                                                decoration: BoxDecoration(
-                                                  border: Border(
-                                                    bottom: BorderSide(
-                                                      color: isDark
-                                                          ? Colors.white12
-                                                          : Colors.black12,
-                                                    ),
-                                                  ),
-                                                ),
-                                                child: Row(
-                                                  mainAxisAlignment:
-                                                      MainAxisAlignment
-                                                          .spaceBetween,
-                                                  children: [
-                                                    Text(
-                                                      option.itemName,
-                                                      style: TextStyle(
-                                                        color:
-                                                            AppStyles.getTextColor(
-                                                              isDark,
-                                                            ),
-                                                      ),
-                                                    ),
-                                                    Text(
-                                                      '₹${option.sellingPrice.toStringAsFixed(2)}',
-                                                      style: TextStyle(
-                                                        color: isDark
-                                                            ? Colors.white70
-                                                            : Colors.black54,
-                                                        fontSize: 16,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                },
+                                optionsViewBuilder:
+                                    (context, onSelected, options) {
+                                      return _SearchResultsOverlay(
+                                        options: options,
+                                        onSelected: onSelected,
+                                        isDark: isDark,
+                                      );
+                                    },
                               ),
                             ),
                           ],
@@ -505,6 +548,21 @@ class _BillingScreenState extends State<BillingScreen> {
                         child: const Text('Add', style: AppStyles.buttonText),
                       ),
                       const SizedBox(height: 10),
+                      ElevatedButton(
+                        onPressed: _addCustomItem,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.orange,
+                          minimumSize: const Size(120, 45),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text(
+                          'Custom',
+                          style: AppStyles.buttonText,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       TextButton.icon(
                         onPressed: _clearAll,
                         icon: const Icon(
@@ -519,70 +577,12 @@ class _BillingScreenState extends State<BillingScreen> {
                     ],
                   ),
                   const Spacer(),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        'P: ${_currentProfit.toStringAsFixed(2)}',
-                        style: AppStyles.dpPriceStyle,
-                      ),
-                      const SizedBox(height: 20),
-                      Row(
-                        children: [
-                          Text(
-                            'Discount:  ',
-                            style: AppStyles.getLabelStyle(isDark),
-                          ),
-                          SizedBox(
-                            width: 120,
-                            height: 40,
-                            child: TextField(
-                              controller: _discountController,
-                              onChanged: (_) => _calculateTotals(),
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppStyles.getTextColor(isDark),
-                              ),
-                              decoration: InputDecoration(
-                                fillColor: AppStyles.getInputBg(isDark),
-                                filled: true,
-                                border: OutlineInputBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                  borderSide: BorderSide.none,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      Text(
-                        'Total: ${settings.currencySymbol}${_totalAmount.toStringAsFixed(2)}',
-                        style: AppStyles.getScreenTitleStyle(
-                          isDark,
-                        ).copyWith(fontSize: 24, fontWeight: FontWeight.bold),
-                      ),
-                      const SizedBox(height: 20),
-                      ElevatedButton(
-                        onPressed: _finalizeSale,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.green,
-                          minimumSize: const Size(150, 50),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                        ),
-                        child: const Text(
-                          'Finalize Sale',
-                          style: AppStyles.buttonText,
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
-              const SizedBox(height: 40),
-              _buildTable(settings),
+              const SizedBox(height: 20),
+              Expanded(child: _buildBillingTable(isDark)),
+              const SizedBox(height: 20),
+              _buildTotalSection(isDark),
             ],
           ),
         ),
@@ -607,8 +607,12 @@ class _BillingScreenState extends State<BillingScreen> {
             height: 45,
             child: TextField(
               controller: controller,
-              onSubmitted: (value) => _addItem(),
               style: TextStyle(color: AppStyles.getTextColor(isDark)),
+              onSubmitted: (_) {
+                if (controller == _searchController) {
+                  _addItem();
+                }
+              },
               decoration: InputDecoration(
                 hintText: hint,
                 hintStyle: TextStyle(
@@ -629,166 +633,395 @@ class _BillingScreenState extends State<BillingScreen> {
     );
   }
 
-  Widget _buildTable(SettingsProvider settings) {
-    final isDark = settings.isDarkMode;
-    return Expanded(
-      child: Container(
-        decoration: BoxDecoration(
-          border: Border.all(color: isDark ? Colors.white24 : Colors.black26),
-        ),
-        child: Column(
-          children: [
-            Container(
+  Widget _buildBillingTable(bool isDark) {
+    return Container(
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF2D2D2D) : Colors.white,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: isDark ? Colors.white12 : Colors.black12),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
+            decoration: BoxDecoration(
               color: AppStyles.getTableHeaderBg(isDark),
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 20),
-              child: Row(
-                children: [
-                  SizedBox(
-                    width: 50,
-                    child: Text(
-                      'Sl',
-                      style: AppStyles.getTableHeaderStyle(isDark),
-                    ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    child: Text(
-                      'Product Name',
-                      style: AppStyles.getTableHeaderStyle(isDark),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 100,
-                    child: Text(
-                      'Quantity',
-                      textAlign: TextAlign.center,
-                      style: AppStyles.getTableHeaderStyle(isDark),
-                    ),
-                  ),
-                  SizedBox(
-                    width: 100,
-                    child: Text(
-                      'Price',
-                      textAlign: TextAlign.center,
-                      style: AppStyles.getTableHeaderStyle(isDark),
-                    ),
-                  ),
-                ],
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(10),
               ),
             ),
-            Expanded(
-              child: ListView.builder(
-                itemCount: _currentItems.length,
-                itemBuilder: (context, index) {
-                  final item = _currentItems[index];
-                  final isHovered = _hoveredIndex == index;
-
-                  return MouseRegion(
-                    onEnter: (_) => setState(() => _hoveredIndex = index),
-                    onExit: (_) => setState(() => _hoveredIndex = null),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 10,
-                        horizontal: 20,
-                      ),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: isDark ? Colors.white12 : Colors.black12,
-                          ),
+            child: Row(
+              children: [
+                SizedBox(
+                  width: 50,
+                  child: Text(
+                    'Sl',
+                    style: AppStyles.getTableHeaderStyle(isDark),
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Expanded(
+                  child: Text(
+                    'Item Name',
+                    style: AppStyles.getTableHeaderStyle(isDark),
+                  ),
+                ),
+                SizedBox(
+                  width: 100,
+                  child: Text(
+                    'Price',
+                    textAlign: TextAlign.center,
+                    style: AppStyles.getTableHeaderStyle(isDark),
+                  ),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: Text(
+                    'Qty',
+                    textAlign: TextAlign.center,
+                    style: AppStyles.getTableHeaderStyle(isDark),
+                  ),
+                ),
+                SizedBox(
+                  width: 120,
+                  child: Text(
+                    'Total',
+                    textAlign: TextAlign.center,
+                    style: AppStyles.getTableHeaderStyle(isDark),
+                  ),
+                ),
+                const SizedBox(width: 50),
+              ],
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: _currentItems.length,
+              itemBuilder: (context, index) {
+                final item = _currentItems[index];
+                final isHovered = _hoveredIndex == index;
+                final itemTotal = item.product.sellingPrice * item.quantity;
+                return MouseRegion(
+                  onEnter: (_) => setState(() => _hoveredIndex = index),
+                  onExit: (_) => setState(() => _hoveredIndex = null),
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isHovered
+                          ? (isDark
+                                ? Colors.white.withOpacity(0.05)
+                                : Colors.grey[100])
+                          : null,
+                      border: Border(
+                        bottom: BorderSide(
+                          color: isDark ? Colors.white12 : Colors.black12,
                         ),
                       ),
-                      child: Row(
-                        children: [
-                          SizedBox(
-                            width: 50,
-                            child: Text(
-                              '${index + 1}',
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 8,
+                      horizontal: 20,
+                    ),
+                    child: Row(
+                      children: [
+                        SizedBox(
+                          width: 50,
+                          child: Text(
+                            '${index + 1}',
+                            style: TextStyle(
+                              color: AppStyles.getTextColor(isDark),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 20),
+                        Expanded(
+                          child: Text(
+                            item.product.itemName,
+                            style: TextStyle(
+                              color: AppStyles.getTextColor(isDark),
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 100,
+                          child: Text(
+                            '₹${item.product.sellingPrice.toStringAsFixed(2)}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppStyles.getTextColor(isDark),
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 120,
+                          child: _buildQuantityControl(
+                            index,
+                            item.quantity,
+                            isDark,
+                          ),
+                        ),
+                        SizedBox(
+                          width: 120,
+                          child: Text(
+                            '₹${itemTotal.toStringAsFixed(2)}',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              color: AppStyles.getTextColor(isDark),
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        SizedBox(
+                          width: 50,
+                          child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.red),
+                            onPressed: () => _removeItem(index),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildQuantityControl(int index, int quantity, bool isDark) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          icon: Icon(
+            Icons.remove_circle_outline,
+            size: 20,
+            color: isDark ? Colors.white54 : Colors.black54,
+          ),
+          onPressed: () => _updateQuantity(index, -1),
+          constraints: const BoxConstraints(),
+          padding: EdgeInsets.zero,
+        ),
+        SizedBox(
+          width: 40,
+          child: Text(
+            '$quantity',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppStyles.getTextColor(isDark),
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+        ),
+        IconButton(
+          icon: Icon(
+            Icons.add_circle_outline,
+            size: 20,
+            color: isDark ? Colors.white54 : Colors.black54,
+          ),
+          onPressed: () => _updateQuantity(index, 1),
+          constraints: const BoxConstraints(),
+          padding: EdgeInsets.zero,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTotalSection(bool isDark) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppStyles.getTableHeaderBg(isDark),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Text(
+                'Discount: ',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.getTextColor(isDark),
+                ),
+              ),
+              SizedBox(
+                width: 100,
+                child: TextField(
+                  controller: _discountController,
+                  keyboardType: const TextInputType.numberWithOptions(
+                    decimal: true,
+                  ),
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.red,
+                  ),
+                  onChanged: (value) => _calculateTotals(),
+                  decoration: const InputDecoration(
+                    prefixText: '₹',
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: EdgeInsets.zero,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          Row(
+            children: [
+              Text(
+                'Total: ',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppStyles.getTextColor(isDark),
+                ),
+              ),
+              Text(
+                '₹${_totalAmount.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              const SizedBox(width: 40),
+              ElevatedButton(
+                onPressed: _finalizeSale,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppStyles.primaryTeal,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 40,
+                    vertical: 20,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: const Text('Finalize', style: TextStyle(fontSize: 18)),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchResultsOverlay extends StatefulWidget {
+  final Iterable<Product> options;
+  final AutocompleteOnSelected<Product> onSelected;
+  final bool isDark;
+
+  const _SearchResultsOverlay({
+    required this.options,
+    required this.onSelected,
+    required this.isDark,
+  });
+
+  @override
+  State<_SearchResultsOverlay> createState() => _SearchResultsOverlayState();
+}
+
+class _SearchResultsOverlayState extends State<_SearchResultsOverlay> {
+  int _visibleCount = 5;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayedOptions = widget.options.take(_visibleCount).toList();
+    final hasMore = widget.options.length > _visibleCount;
+
+    return Align(
+      alignment: Alignment.topLeft,
+      child: Material(
+        elevation: 4.0,
+        color: AppStyles.getDialogBgColor(widget.isDark),
+        borderRadius: BorderRadius.circular(10),
+        child: Container(
+          width: 400,
+          constraints: const BoxConstraints(maxHeight: 300),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Flexible(
+                child: ListView.builder(
+                  padding: EdgeInsets.zero,
+                  shrinkWrap: true,
+                  itemCount: displayedOptions.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final Product option = displayedOptions[index];
+                    return InkWell(
+                      onTap: () => widget.onSelected(option),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 12,
+                          horizontal: 16,
+                        ),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: widget.isDark
+                                  ? Colors.white12
+                                  : Colors.black12,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Text(
+                              option.itemName,
                               style: TextStyle(
-                                color: AppStyles.getTextColor(isDark),
+                                color: AppStyles.getTextColor(widget.isDark),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 20),
-                          Expanded(
-                            child: Text(
-                              item.product.itemName,
+                            Text(
+                              '₹${option.sellingPrice.toStringAsFixed(2)}',
                               style: TextStyle(
-                                color: AppStyles.getTextColor(isDark),
+                                color: widget.isDark
+                                    ? Colors.white70
+                                    : Colors.black54,
+                                fontSize: 16,
                               ),
                             ),
-                          ),
-                          SizedBox(
-                            width: 100,
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                if (isHovered)
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.remove_circle_outline,
-                                      size: 18,
-                                    ),
-                                    onPressed: () => _updateQuantity(index, -1),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8.0,
-                                  ),
-                                  child: Text(
-                                    item.quantity.toString(),
-                                    style: TextStyle(
-                                      color: AppStyles.getTextColor(isDark),
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                                if (isHovered)
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.add_circle_outline,
-                                      size: 18,
-                                    ),
-                                    onPressed: () => _updateQuantity(index, 1),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                                if (isHovered) const SizedBox(width: 8),
-                                if (isHovered)
-                                  IconButton(
-                                    icon: const Icon(
-                                      Icons.delete_outline,
-                                      size: 18,
-                                      color: Colors.red,
-                                    ),
-                                    onPressed: () => _removeItem(index),
-                                    padding: EdgeInsets.zero,
-                                    constraints: const BoxConstraints(),
-                                  ),
-                              ],
-                            ),
-                          ),
-                          SizedBox(
-                            width: 100,
-                            child: Text(
-                              '${settings.currencySymbol}${(item.product.sellingPrice * item.quantity).toStringAsFixed(2)}',
-                              textAlign: TextAlign.center,
-                              style: TextStyle(
-                                color: AppStyles.getTextColor(isDark),
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ),
-                        ],
+                          ],
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ),
+              if (hasMore)
+                InkWell(
+                  onTap: () {
+                    setState(() {
+                      _visibleCount += 5;
+                    });
+                  },
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    color: widget.isDark ? Colors.white10 : Colors.grey[200],
+                    child: Center(
+                      child: Text(
+                        'Show More (${widget.options.length - _visibleCount} remaining)',
+                        style: TextStyle(
+                          color: AppStyles.primaryTeal,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  );
-                },
-              ),
-            ),
-          ],
+                  ),
+                ),
+            ],
+          ),
         ),
       ),
     );

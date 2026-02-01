@@ -39,9 +39,30 @@ class DatabaseService {
         item_id VARCHAR(255) UNIQUE NOT NULL,
         item_name VARCHAR(255) NOT NULL,
         original_price DECIMAL(10, 2) NOT NULL,
-        selling_price DECIMAL(10, 2) NOT NULL
+        selling_price DECIMAL(10, 2) NOT NULL,
+        selling_price DECIMAL(10, 2) NOT NULL,
+        quantity INT DEFAULT NULL,
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       )
     ''');
+
+    // Migration to add quantity column if it doesn't exist
+    try {
+      await conn.execute('SELECT quantity FROM products LIMIT 1');
+    } catch (e) {
+      await conn.execute(
+        'ALTER TABLE products ADD COLUMN quantity INT DEFAULT NULL',
+      );
+    }
+
+    // Migration to add last_updated column if it doesn't exist
+    try {
+      await conn.execute('SELECT last_updated FROM products LIMIT 1');
+    } catch (e) {
+      await conn.execute(
+        'ALTER TABLE products ADD COLUMN last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP',
+      );
+    }
 
     await conn.execute('''
       CREATE TABLE IF NOT EXISTS sales (
@@ -69,12 +90,13 @@ class DatabaseService {
   Future<void> addProduct(Product product) async {
     final conn = await connection;
     await conn.execute(
-      'INSERT INTO products (item_id, item_name, original_price, selling_price) VALUES (:id, :name, :orig, :sell)',
+      'INSERT INTO products (item_id, item_name, original_price, selling_price, quantity, last_updated) VALUES (:id, :name, :orig, :sell, :qty, NOW())',
       {
         'id': product.itemId,
         'name': product.itemName,
         'orig': product.originalPrice,
         'sell': product.sellingPrice,
+        'qty': product.quantity,
       },
     );
   }
@@ -82,11 +104,12 @@ class DatabaseService {
   Future<void> updateProduct(Product product) async {
     final conn = await connection;
     await conn.execute(
-      'UPDATE products SET item_name = :name, original_price = :orig, selling_price = :sell WHERE item_id = :id',
+      'UPDATE products SET item_name = :name, original_price = :orig, selling_price = :sell, quantity = :qty, last_updated = NOW() WHERE item_id = :id',
       {
         'name': product.itemName,
         'orig': product.originalPrice,
         'sell': product.sellingPrice,
+        'qty': product.quantity,
         'id': product.itemId,
       },
     );
@@ -99,10 +122,38 @@ class DatabaseService {
     });
   }
 
+  Future<String> getNextAvailableId() async {
+    final conn = await connection;
+    // Get all item_ids that are integers, sorted
+    final results = await conn.execute(
+      'SELECT item_id FROM products WHERE item_id REGEXP "^[0-9]+\$" ORDER BY CAST(item_id AS UNSIGNED) ASC',
+    );
+
+    int nextId = 0;
+    for (final row in results.rows) {
+      final currentId = int.tryParse(row.assoc()['item_id'] ?? '-1') ?? -1;
+      if (currentId == nextId) {
+        nextId++;
+      } else if (currentId > nextId) {
+        // Found a gap or end of sequence for this specific simple logic
+        return nextId.toString();
+      }
+    }
+    return nextId.toString();
+  }
+
+  Future<void> deleteSalesBefore(DateTime date) async {
+    final conn = await connection;
+    final dateStr = date.toIso8601String().split('T')[0];
+    await conn.execute('DELETE FROM sales WHERE sale_date < :date', {
+      'date': dateStr,
+    });
+  }
+
   Future<List<Product>> getAllProducts() async {
     final conn = await connection;
     final results = await conn.execute(
-      'SELECT * FROM products ORDER BY id DESC',
+      'SELECT * FROM products ORDER BY last_updated DESC',
     );
     return results.rows.map((row) => Product.fromMap(row.assoc())).toList();
   }
@@ -110,7 +161,7 @@ class DatabaseService {
   Future<List<Product>> searchSuggestions(String query) async {
     final conn = await connection;
     final results = await conn.execute(
-      'SELECT * FROM products WHERE item_name LIKE :query LIMIT 5',
+      'SELECT * FROM products WHERE item_name LIKE :query LIMIT 50',
       {'query': '%$query%'},
     );
     return results.rows.map((row) => Product.fromMap(row.assoc())).toList();

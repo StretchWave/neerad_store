@@ -32,18 +32,29 @@ class _SalesScreenState extends State<SalesScreen> {
                 'Sales History:',
                 style: AppStyles.getScreenTitleStyle(isDark),
               ),
-              ElevatedButton.icon(
-                onPressed: _showStatistics,
-                icon: const Icon(Icons.analytics),
-                label: const Text('Statistics'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: AppStyles.primaryTeal,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 20,
-                    vertical: 15,
+
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.delete_sweep, color: Colors.red),
+                    tooltip: 'Clear history before this month',
+                    onPressed: _deleteOldSales,
                   ),
-                ),
+                  const SizedBox(width: 10),
+                  ElevatedButton.icon(
+                    onPressed: _showStatistics,
+                    icon: const Icon(Icons.analytics),
+                    label: const Text('Statistics'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppStyles.primaryTeal,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 20,
+                        vertical: 15,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -388,6 +399,58 @@ class _SalesScreenState extends State<SalesScreen> {
           ],
         ),
       );
+    }
+  }
+
+  Future<void> _deleteOldSales() async {
+    final isDark = context.read<SettingsProvider>().isDarkMode;
+    final now = DateTime.now();
+    final firstDayOfCurrentMonth = DateTime(now.year, now.month, 1);
+
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppStyles.getDialogBgColor(isDark),
+        title: Text(
+          'Delete Old History?',
+          style: AppStyles.getDialogTitleStyle(isDark),
+        ),
+        content: Text(
+          'This will delete all sales records before ${DateFormat('MMMM d, yyyy').format(firstDayOfCurrentMonth)}.\n\nThis action cannot be undone.',
+          style: AppStyles.getDialogTextStyle(isDark),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text(
+              'Delete All',
+              style: TextStyle(color: Colors.red),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await _db.deleteSalesBefore(firstDayOfCurrentMonth);
+        setState(() {}); // Refresh list
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Old sales data deleted.')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error: $e'), backgroundColor: Colors.red),
+          );
+        }
+      }
     }
   }
 

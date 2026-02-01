@@ -17,6 +17,7 @@ class _ProductScreenState extends State<ProductScreen> {
   final _idController = TextEditingController();
   final _originalPriceController = TextEditingController();
   final _sellingPriceController = TextEditingController();
+  final _quantityController = TextEditingController();
 
   List<Product> _products = [];
   bool _isLoading = true;
@@ -50,11 +51,29 @@ class _ProductScreenState extends State<ProductScreen> {
       return;
     }
 
+    String itemId = _idController.text;
+    if (itemId.isEmpty) {
+      if (_isEditing) {
+        // Should not happen as ID is read-only in edit, but safety check
+        _showError('Item ID cannot be empty on update');
+        return;
+      }
+      try {
+        itemId = await DatabaseService().getNextAvailableId();
+      } catch (e) {
+        _showError('Failed to generate Item ID: $e');
+        return;
+      }
+    }
+
     final product = Product(
-      itemId: _idController.text,
+      itemId: itemId,
       itemName: _nameController.text,
       originalPrice: double.tryParse(_originalPriceController.text) ?? 0.0,
       sellingPrice: double.tryParse(_sellingPriceController.text) ?? 0.0,
+      quantity: _quantityController.text.isNotEmpty
+          ? int.tryParse(_quantityController.text)
+          : null,
     );
 
     try {
@@ -86,6 +105,7 @@ class _ProductScreenState extends State<ProductScreen> {
       _nameController.text = product.itemName;
       _originalPriceController.text = product.originalPrice.toString();
       _sellingPriceController.text = product.sellingPrice.toString();
+      _quantityController.text = product.quantity?.toString() ?? '';
     });
   }
 
@@ -137,6 +157,7 @@ class _ProductScreenState extends State<ProductScreen> {
     _idController.clear();
     _originalPriceController.clear();
     _sellingPriceController.clear();
+    _quantityController.clear();
   }
 
   void _showError(String message) {
@@ -171,7 +192,9 @@ class _ProductScreenState extends State<ProductScreen> {
                   const SizedBox(height: 20),
                   _buildInputRow(
                     'Item ID:',
-                    'Scan the Bar code here!',
+                    _isEditing
+                        ? 'Cannot change ID'
+                        : 'Scan or leave empty for auto-ID',
                     _idController,
                     isDark,
                     readOnly: _isEditing,
@@ -189,6 +212,14 @@ class _ProductScreenState extends State<ProductScreen> {
                     'Selling Price:',
                     '',
                     _sellingPriceController,
+                    isDark,
+                    width: 120,
+                  ),
+                  const SizedBox(height: 20),
+                  _buildInputRow(
+                    'Quantity:',
+                    '(Optional)',
+                    _quantityController,
                     isDark,
                     width: 120,
                   ),
@@ -306,6 +337,20 @@ class _ProductScreenState extends State<ProductScreen> {
                   ),
                 ),
                 const SizedBox(width: 20),
+                SizedBox(
+                  width: 100, // ID Column
+                  child: Text(
+                    'Item ID',
+                    style: AppStyles.getTableHeaderStyle(isDark),
+                  ),
+                ),
+                Text(
+                  '|',
+                  style: TextStyle(
+                    color: isDark ? Colors.white24 : Colors.black26,
+                  ),
+                ),
+                const SizedBox(width: 20),
                 Expanded(
                   child: Text(
                     'Product Name',
@@ -398,12 +443,38 @@ class _ProductScreenState extends State<ProductScreen> {
                             children: [
                               SizedBox(width: 50, child: Text('${index + 1}')),
                               const SizedBox(width: 20),
-                              Expanded(
+                              SizedBox(
+                                width: 100,
                                 child: Text(
-                                  p.itemName,
+                                  p.itemId,
                                   style: TextStyle(
                                     color: AppStyles.getTextColor(isDark),
                                   ),
+                                ),
+                              ),
+                              const SizedBox(width: 20),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      p.itemName,
+                                      style: TextStyle(
+                                        color: AppStyles.getTextColor(isDark),
+                                      ),
+                                    ),
+                                    if (p.quantity != null)
+                                      Text(
+                                        'Qty: ${p.quantity}',
+                                        style: TextStyle(
+                                          color: isDark
+                                              ? Colors.white54
+                                              : Colors.black54,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
                               SizedBox(
