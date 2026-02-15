@@ -2,7 +2,7 @@
 ; This script bundles the Flutter build output into a Windows Setup (.exe)
 
 #define MyAppName "Neerad Store"
-#define MyAppVersion "1.0.0"
+#define MyAppVersion "1.3"
 #define MyAppPublisher "StretchWave"
 #define MyAppExeName "neerad_store.exe"
 
@@ -14,7 +14,8 @@ AppPublisher={#MyAppPublisher}
 DefaultDirName={autopf}\{#MyAppName}
 DisableProgramGroupPage=yes
 OutputDir=..\build\installer
-OutputBaseFilename=NeeradStoreSetup
+OutputBaseFilename=NeeradStoreSetup_v1.3
+SetupIconFile=runner\resources\app_icon.ico
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern

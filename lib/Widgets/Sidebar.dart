@@ -22,7 +22,37 @@ class Sidebar extends StatelessWidget {
       color: AppStyles.getSidebarBg(isDark),
       child: Column(
         children: [
-          const SizedBox(height: 20),
+          DrawerHeader(
+            decoration: BoxDecoration(color: AppStyles.primaryTeal),
+            child: Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Container(
+                    height: 80,
+                    width: 80,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      shape: BoxShape.circle,
+                      image: const DecorationImage(
+                        image: AssetImage('assets/logo.png'),
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Neerad Store',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
           _SidebarItem(
             icon: Icons.receipt_long,
             isSelected: currentIndex == 0,

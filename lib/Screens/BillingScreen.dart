@@ -11,7 +11,8 @@ class BillingScreen extends StatefulWidget {
   const BillingScreen({super.key});
 
   @override
-  State<BillingScreen> createState() => _BillingScreenState();
+  @override
+  State<BillingScreen> createState() => BillingScreenState();
 }
 
 class BillingItem {
@@ -21,8 +22,13 @@ class BillingItem {
   BillingItem({required this.product, this.quantity = 1});
 }
 
-class _BillingScreenState extends State<BillingScreen> {
+class BillingScreenState extends State<BillingScreen> {
   final _searchController = TextEditingController();
+
+  // Public method to reclaim focus
+  void requestScannerFocus() {
+    _rootFocusNode.requestFocus();
+  }
 
   String _encodeToAlphabets(double value) {
     if (value == 0)
@@ -50,6 +56,8 @@ class _BillingScreenState extends State<BillingScreen> {
   final _discountController = TextEditingController(text: '0.00');
   final _nameFocusNode = FocusNode();
   final _rootFocusNode = FocusNode();
+  // Added separate focus node for search field to track its focus state
+  final _searchFocusNode = FocusNode();
   String _barcodeBuffer = '';
   DateTime _lastKeyEventTime = DateTime.now();
 
@@ -66,6 +74,7 @@ class _BillingScreenState extends State<BillingScreen> {
     _discountController.dispose();
     _nameFocusNode.dispose();
     _rootFocusNode.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -78,16 +87,28 @@ class _BillingScreenState extends State<BillingScreen> {
     });
   }
 
-  void _handleKeyEvent(KeyEvent event) {
+  void _handleKeyEvent(FocusNode node, KeyEvent event) {
     if (event is KeyDownEvent) {
+      // Prevent processing if text fields are focused to avoid double entry
+      if (_searchFocusNode.hasFocus || _nameFocusNode.hasFocus) {
+        return;
+      }
+
       final now = DateTime.now();
-      // If gap is too large (>100ms), it's likely manual typing or separate scans
-      if (now.difference(_lastKeyEventTime).inMilliseconds > 100) {
+
+      // DEBUG: Log keys to see if scanner is working
+      print(
+        'DEBUG: Key received: ${event.logicalKey.keyLabel} (Code: ${event.logicalKey}) Char: ${event.character}',
+      );
+
+      // Increased timeout to 500ms to be more forgiving for different scanners/system speeds
+      if (now.difference(_lastKeyEventTime).inMilliseconds > 500) {
         _barcodeBuffer = '';
       }
       _lastKeyEventTime = now;
 
-      if (event.logicalKey == LogicalKeyboardKey.enter) {
+      if (event.logicalKey == LogicalKeyboardKey.enter ||
+          event.logicalKey == LogicalKeyboardKey.numpadEnter) {
         if (_barcodeBuffer.isNotEmpty) {
           _processBarcode(_barcodeBuffer);
           _barcodeBuffer = '';
@@ -95,9 +116,21 @@ class _BillingScreenState extends State<BillingScreen> {
           _finalizeSale();
         }
       } else if (event.character != null) {
-        _barcodeBuffer += event.character!;
+        // Only add printable characters to the buffer
+        if (!_isControlChar(event.character!)) {
+          _barcodeBuffer += event.character!;
+          // DEBUG: Show buffer growth
+          print('DEBUG: Buffer: $_barcodeBuffer');
+        }
       }
     }
+  }
+
+  bool _isControlChar(String char) {
+    if (char.isEmpty) return true;
+    final codeUnit = char.codeUnitAt(0);
+    // 0-31 are control chars, 127 is delete
+    return codeUnit < 32 || codeUnit == 127;
   }
 
   Future<void> _processBarcode(String barcode) async {
@@ -111,6 +144,7 @@ class _BillingScreenState extends State<BillingScreen> {
     } catch (e) {
       _showError('Scanner error: $e');
     }
+    _rootFocusNode.requestFocus();
   }
 
   Future<void> _loadDailyProfit() async {
@@ -138,6 +172,7 @@ class _BillingScreenState extends State<BillingScreen> {
     } catch (e) {
       _showError('Search error: $e');
     }
+    _rootFocusNode.requestFocus();
   }
 
   Future<void> _addCustomItem() async {
@@ -202,7 +237,7 @@ class _BillingScreenState extends State<BillingScreen> {
           ),
         ],
       ),
-    );
+    ).then((_) => _rootFocusNode.requestFocus());
   }
 
   void _addProductToBilling(Product product) {
@@ -282,7 +317,7 @@ class _BillingScreenState extends State<BillingScreen> {
           ),
         ],
       ),
-    );
+    ).then((_) => _rootFocusNode.requestFocus());
   }
 
   void _clearAll() {
@@ -319,7 +354,7 @@ class _BillingScreenState extends State<BillingScreen> {
           ),
         ],
       ),
-    );
+    ).then((_) => _rootFocusNode.requestFocus());
   }
 
   Future<void> _finalizeSale() async {
@@ -369,6 +404,7 @@ class _BillingScreenState extends State<BillingScreen> {
     } catch (e) {
       _showError('Failed to finalize sale: $e');
     }
+    _rootFocusNode.requestFocus();
   }
 
   void _showError(String message) {
@@ -388,15 +424,20 @@ class _BillingScreenState extends State<BillingScreen> {
     final settings = context.watch<SettingsProvider>();
     final isDark = settings.isDarkMode;
 
-    return GestureDetector(
-      onTap: () {
-        if (!FocusScope.of(context).hasPrimaryFocus) {
-          _rootFocusNode.requestFocus();
-        }
+    return Focus(
+      focusNode: _rootFocusNode,
+      autofocus: true,
+      onKeyEvent: (node, event) {
+        _handleKeyEvent(node, event);
+        return KeyEventResult.ignored; // Allow propagation
       },
-      child: KeyboardListener(
-        focusNode: _rootFocusNode,
-        onKeyEvent: _handleKeyEvent,
+      child: GestureDetector(
+        onTap: () {
+          // If the user taps outside any input field, reclaim focus for the scanner
+          if (!_searchFocusNode.hasFocus && !_nameFocusNode.hasFocus) {
+            _rootFocusNode.requestFocus();
+          }
+        },
         child: Padding(
           padding: const EdgeInsets.all(40.0),
           child: Column(
@@ -442,6 +483,7 @@ class _BillingScreenState extends State<BillingScreen> {
                           'Scan the Bar code here!',
                           _searchController,
                           isDark,
+                          focusNode: _searchFocusNode,
                         ),
                         const SizedBox(height: 20),
                         Row(
@@ -594,8 +636,9 @@ class _BillingScreenState extends State<BillingScreen> {
     String label,
     String hint,
     TextEditingController controller,
-    bool isDark,
-  ) {
+    bool isDark, {
+    FocusNode? focusNode,
+  }) {
     return Row(
       children: [
         SizedBox(
@@ -607,6 +650,7 @@ class _BillingScreenState extends State<BillingScreen> {
             height: 45,
             child: TextField(
               controller: controller,
+              focusNode: focusNode,
               style: TextStyle(color: AppStyles.getTextColor(isDark)),
               onSubmitted: (_) {
                 if (controller == _searchController) {
@@ -982,14 +1026,31 @@ class _SearchResultsOverlayState extends State<_SearchResultsOverlay> {
                                 color: AppStyles.getTextColor(widget.isDark),
                               ),
                             ),
-                            Text(
-                              '₹${option.sellingPrice.toStringAsFixed(2)}',
-                              style: TextStyle(
-                                color: widget.isDark
-                                    ? Colors.white70
-                                    : Colors.black54,
-                                fontSize: 16,
-                              ),
+                            Row(
+                              children: [
+                                if (option.quantity != null &&
+                                    option.quantity == 0)
+                                  Padding(
+                                    padding: const EdgeInsets.only(right: 8.0),
+                                    child: Text(
+                                      'Out of Stock',
+                                      style: TextStyle(
+                                        color: Colors.red,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                Text(
+                                  '₹${option.sellingPrice.toStringAsFixed(2)}',
+                                  style: TextStyle(
+                                    color: widget.isDark
+                                        ? Colors.white70
+                                        : Colors.black54,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),

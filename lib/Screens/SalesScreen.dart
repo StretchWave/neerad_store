@@ -266,37 +266,45 @@ class _SalesScreenState extends State<SalesScreen> {
                 ],
               ),
               Divider(color: AppStyles.getDividerColor(isDark)),
-              ...sales.map(
-                (sale) => Padding(
-                  padding: const EdgeInsets.symmetric(vertical: 8.0),
-                  child: Row(
+              Flexible(
+                child: SingleChildScrollView(
+                  child: Column(
                     children: [
-                      Expanded(
-                        flex: 3,
-                        child: Text(
-                          sale.itemName,
-                          style: AppStyles.getDialogTextStyle(isDark),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          sale.quantity.toString(),
-                          textAlign: TextAlign.center,
-                          style: AppStyles.getDialogTextStyle(isDark),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          sale.profit.toStringAsFixed(2),
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(color: Colors.green),
-                        ),
-                      ),
-                      Expanded(
-                        child: Text(
-                          sale.totalPrice.toStringAsFixed(2),
-                          textAlign: TextAlign.center,
-                          style: AppStyles.getDialogTextStyle(isDark),
+                      ...sales.map(
+                        (sale) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8.0),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                flex: 3,
+                                child: Text(
+                                  sale.itemName,
+                                  style: AppStyles.getDialogTextStyle(isDark),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  sale.quantity.toString(),
+                                  textAlign: TextAlign.center,
+                                  style: AppStyles.getDialogTextStyle(isDark),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  sale.profit.toStringAsFixed(2),
+                                  textAlign: TextAlign.center,
+                                  style: const TextStyle(color: Colors.green),
+                                ),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  sale.totalPrice.toStringAsFixed(2),
+                                  textAlign: TextAlign.center,
+                                  style: AppStyles.getDialogTextStyle(isDark),
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ],
@@ -314,14 +322,29 @@ class _SalesScreenState extends State<SalesScreen> {
                       color: AppStyles.getTextColor(isDark),
                     ),
                   ),
-                  Text(
-                    'P: ${sales.fold(0.0, (sum, item) => sum + item.profit).toStringAsFixed(2)} | '
-                    'Total: ${sales.fold(0.0, (sum, item) => sum + item.totalPrice).toStringAsFixed(2)}',
-                    style: TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
-                      color: AppStyles.getTextColor(isDark),
-                    ),
+                  Builder(
+                    builder: (context) {
+                      final totalProfit = sales.fold(
+                        0.0,
+                        (sum, item) => sum + item.profit,
+                      );
+                      final totalPrice = sales.fold(
+                        0.0,
+                        (sum, item) => sum + item.totalPrice,
+                      );
+                      final totalOriginal = totalPrice - totalProfit;
+
+                      return Text(
+                        'P: ${totalProfit.toStringAsFixed(2)} | '
+                        'Original: ${totalOriginal.toStringAsFixed(2)} | '
+                        'Total: ${totalPrice.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                          color: AppStyles.getTextColor(isDark),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

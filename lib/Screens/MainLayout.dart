@@ -15,14 +15,7 @@ class MainLayout extends StatefulWidget {
 
 class _MainLayoutState extends State<MainLayout> {
   int _currentIndex = 0;
-
-  final List<Widget> _screens = [
-    const BillingScreen(),
-    const ProductScreen(),
-    const InventoryScreen(),
-    const SalesScreen(),
-    const SettingsScreen(),
-  ];
+  final GlobalKey<BillingScreenState> _billingKey = GlobalKey();
 
   @override
   Widget build(BuildContext context) {
@@ -35,10 +28,30 @@ class _MainLayoutState extends State<MainLayout> {
               setState(() {
                 _currentIndex = index;
               });
+              // Restore scanner focus when switching back to Billing Screen
+              if (index == 0) {
+                // Small delay to ensure widget is visible/onstage before requesting focus
+                Future.delayed(const Duration(milliseconds: 50), () {
+                  _billingKey.currentState?.requestScannerFocus();
+                });
+              }
             },
           ),
           Expanded(
-            child: IndexedStack(index: _currentIndex, children: _screens),
+            child: Stack(
+              children: [
+                // Keep BillingScreen (index 0) alive to preserve Cart
+                Offstage(
+                  offstage: _currentIndex != 0,
+                  child: BillingScreen(key: _billingKey),
+                ),
+                // Rebuild other screens on every visit to force data reload
+                if (_currentIndex == 1) const ProductScreen(),
+                if (_currentIndex == 2) const InventoryScreen(),
+                if (_currentIndex == 3) const SalesScreen(),
+                if (_currentIndex == 4) const SettingsScreen(),
+              ],
+            ),
           ),
         ],
       ),

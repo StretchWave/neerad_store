@@ -24,10 +24,32 @@ class _ProductScreenState extends State<ProductScreen> {
   bool _isEditing = false;
   int? _hoveredIndex;
 
+  double _calculatedProfit = 0.0;
+
   @override
   void initState() {
     super.initState();
     _loadProducts();
+    _originalPriceController.addListener(_updateProfit);
+    _sellingPriceController.addListener(_updateProfit);
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _idController.dispose();
+    _originalPriceController.dispose();
+    _sellingPriceController.dispose();
+    _quantityController.dispose();
+    super.dispose();
+  }
+
+  void _updateProfit() {
+    final original = double.tryParse(_originalPriceController.text) ?? 0.0;
+    final selling = double.tryParse(_sellingPriceController.text) ?? 0.0;
+    setState(() {
+      _calculatedProfit = selling - original;
+    });
   }
 
   Future<void> _loadProducts() async {
@@ -106,6 +128,7 @@ class _ProductScreenState extends State<ProductScreen> {
       _originalPriceController.text = product.originalPrice.toString();
       _sellingPriceController.text = product.sellingPrice.toString();
       _quantityController.text = product.quantity?.toString() ?? '';
+      _updateProfit(); // Update profit for the selected product
     });
   }
 
@@ -152,6 +175,7 @@ class _ProductScreenState extends State<ProductScreen> {
   void _clearInputs() {
     setState(() {
       _isEditing = false;
+      _calculatedProfit = 0.0;
     });
     _nameController.clear();
     _idController.clear();
@@ -214,6 +238,23 @@ class _ProductScreenState extends State<ProductScreen> {
                     _sellingPriceController,
                     isDark,
                     width: 120,
+                  ),
+                  const SizedBox(height: 20),
+                  // Profit Display
+                  Row(
+                    children: [
+                      const SizedBox(width: 170), // Align with inputs
+                      Text(
+                        'Profit: ${settings.currencySymbol}${_calculatedProfit.toStringAsFixed(2)}',
+                        style: TextStyle(
+                          color: _calculatedProfit >= 0
+                              ? Colors.green
+                              : Colors.red,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16,
+                        ),
+                      ),
+                    ],
                   ),
                   const SizedBox(height: 20),
                   _buildInputRow(

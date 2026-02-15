@@ -178,8 +178,51 @@ class DatabaseService {
   }
 
   // Sale Operations
+  // Sale Operations
   Future<void> addSale(Sale sale) async {
     final conn = await connection;
+
+    // Explicitly handle inventory deduction with a fetch-update cycle
+    try {
+      final check = await conn.execute(
+        'SELECT quantity FROM products WHERE item_id = :iid',
+        {'iid': sale.itemId},
+      );
+
+      if (check.rows.isNotEmpty) {
+        final row = check.rows.first.assoc();
+        final currentQtyStr = row['quantity'];
+
+        if (currentQtyStr != null) {
+          final currentQty = int.tryParse(currentQtyStr);
+          if (currentQty != null && currentQty > 0) {
+            final newQty = currentQty - sale.quantity;
+            await conn.execute(
+              'UPDATE products SET quantity = :qty WHERE item_id = :iid',
+              {'qty': newQty, 'iid': sale.itemId},
+            );
+            print(
+              'DEBUG: Updated item ${sale.itemId} quantity from $currentQty to $newQty',
+            );
+          } else {
+            print(
+              'DEBUG: Item ${sale.itemId} quantity is 0 or invalid ($currentQty), skipping deduction',
+            );
+          }
+        } else {
+          print(
+            'DEBUG: Item ${sale.itemId} quantity is NULL, skipping deduction',
+          );
+        }
+      } else {
+        print('DEBUG: Product ${sale.itemId} not found for deduction');
+      }
+    } catch (e) {
+      print('DEBUG: Error updating inventory: $e');
+      // Don't block the sale if inventory update fails
+    }
+
+    // Record the sale
     await conn.execute(
       'INSERT INTO sales (transaction_id, item_id, item_name, quantity, discount, profit, total_price) VALUES (:tid, :iid, :name, :qty, :disc, :prof, :total)',
       {

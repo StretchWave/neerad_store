@@ -98,87 +98,120 @@ class _InventoryScreenState extends State<InventoryScreen> {
       text: product.quantity?.toString() ?? '',
     );
 
+    // Initialize profit for initial display
+    double currentProfit = product.sellingPrice - product.originalPrice;
+
     await showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppStyles.getDialogBgColor(isDark),
-        title: Text(
-          'Edit Product',
-          style: AppStyles.getDialogTitleStyle(isDark),
-        ),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: nameController,
-                style: TextStyle(color: AppStyles.getTextColor(isDark)),
-                decoration: InputDecoration(
-                  labelText: 'Name',
-                  labelStyle: TextStyle(
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            void updateProfit() {
+              final orig = double.tryParse(origPriceController.text) ?? 0.0;
+              final sell = double.tryParse(sellPriceController.text) ?? 0.0;
+              setStateDialog(() {
+                currentProfit = sell - orig;
+              });
+            }
+
+            // We need to attach listeners only once, but StatefulBuilder builder is called on rebuilds.
+            // A better way for these simple dialogs is to use onChanged in TextField or just handle listener setup outside if possible.
+            // However, since we defined controllers outside, we can just hook up onChanged.
+
+            return AlertDialog(
+              backgroundColor: AppStyles.getDialogBgColor(isDark),
+              title: Text(
+                'Edit Product',
+                style: AppStyles.getDialogTitleStyle(isDark),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      style: TextStyle(color: AppStyles.getTextColor(isDark)),
+                      decoration: InputDecoration(
+                        labelText: 'Name',
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ),
+                    TextField(
+                      controller: origPriceController,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => updateProfit(),
+                      style: TextStyle(color: AppStyles.getTextColor(isDark)),
+                      decoration: InputDecoration(
+                        labelText: 'Original Price',
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ),
+                    TextField(
+                      controller: sellPriceController,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => updateProfit(),
+                      style: TextStyle(color: AppStyles.getTextColor(isDark)),
+                      decoration: InputDecoration(
+                        labelText: 'Selling Price',
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      'Profit: ${context.read<SettingsProvider>().currencySymbol}${currentProfit.toStringAsFixed(2)}',
+                      style: TextStyle(
+                        color: currentProfit >= 0 ? Colors.green : Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    TextField(
+                      controller: qtyController,
+                      keyboardType: TextInputType.number,
+                      style: TextStyle(color: AppStyles.getTextColor(isDark)),
+                      decoration: InputDecoration(
+                        labelText: 'Quantity',
+                        labelStyle: TextStyle(
+                          color: isDark ? Colors.white70 : Colors.black54,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ),
-              TextField(
-                controller: origPriceController,
-                keyboardType: TextInputType.number,
-                style: TextStyle(color: AppStyles.getTextColor(isDark)),
-                decoration: InputDecoration(
-                  labelText: 'Original Price',
-                  labelStyle: TextStyle(
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancel'),
                 ),
-              ),
-              TextField(
-                controller: sellPriceController,
-                keyboardType: TextInputType.number,
-                style: TextStyle(color: AppStyles.getTextColor(isDark)),
-                decoration: InputDecoration(
-                  labelText: 'Selling Price',
-                  labelStyle: TextStyle(
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
+                ElevatedButton(
+                  onPressed: () async {
+                    final updatedProduct = Product(
+                      id: product.id,
+                      itemId: product.itemId, // ID not editable here logic
+                      itemName: nameController.text,
+                      originalPrice:
+                          double.tryParse(origPriceController.text) ?? 0.0,
+                      sellingPrice:
+                          double.tryParse(sellPriceController.text) ?? 0.0,
+                      quantity: int.tryParse(qtyController.text),
+                    );
+                    await DatabaseService().updateProduct(updatedProduct);
+                    Navigator.pop(context);
+                    _loadProducts();
+                  },
+                  child: const Text('Save'),
                 ),
-              ),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                style: TextStyle(color: AppStyles.getTextColor(isDark)),
-                decoration: InputDecoration(
-                  labelText: 'Quantity',
-                  labelStyle: TextStyle(
-                    color: isDark ? Colors.white70 : Colors.black54,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () async {
-              final updatedProduct = Product(
-                id: product.id,
-                itemId: product.itemId, // ID not editable here logic
-                itemName: nameController.text,
-                originalPrice: double.tryParse(origPriceController.text) ?? 0.0,
-                sellingPrice: double.tryParse(sellPriceController.text) ?? 0.0,
-                quantity: int.tryParse(qtyController.text),
-              );
-              await DatabaseService().updateProduct(updatedProduct);
-              Navigator.pop(context);
-              _loadProducts();
-            },
-            child: const Text('Save'),
-          ),
-        ],
-      ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 
@@ -356,13 +389,23 @@ class _InventoryScreenState extends State<InventoryScreen> {
                               ),
                               SizedBox(
                                 width: 80,
-                                child: Text(
-                                  p.quantity?.toString() ?? '-',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    color: AppStyles.getTextColor(isDark),
-                                  ),
-                                ),
+                                child: (p.quantity != null && p.quantity == 0)
+                                    ? Text(
+                                        'Out of Stock',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: Colors.red,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      )
+                                    : Text(
+                                        p.quantity?.toString() ?? '-',
+                                        textAlign: TextAlign.center,
+                                        style: TextStyle(
+                                          color: AppStyles.getTextColor(isDark),
+                                        ),
+                                      ),
                               ),
                               SizedBox(
                                 width: 100,
